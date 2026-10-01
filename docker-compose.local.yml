@@ -1,0 +1,38 @@
+# Browser login and authenticated agent calls for the local development stack.
+# scripts/start.ps1 supplies the local secret files referenced below.
+x-local-auth: &local-auth
+  AUTH_ISSUER: http://localhost:8080/realms/voyagemesh
+  AUTH_JWKS_URL: http://keycloak:8080/realms/voyagemesh/protocol/openid-connect/certs
+  AUTH_AUDIENCE: voyagemesh-api
+  AUTH_SERVICE_AUTH: keycloak
+
+secrets:
+  orchestrator_client_secret:
+    file: ./.tmp/orchestrator-client.key
+
+services:
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://localhost:8080
+  api-gateway:
+    environment:
+      <<: *local-auth
+      AUTH_DEV_INSECURE_ALLOW_UNAUTHENTICATED: "false"
+      AUTH_SERVICE_CLIENT_ID: voyagemesh-orchestrator
+      AUTH_SERVICE_CLIENT_SECRET_FILE: /run/secrets/orchestrator_client_secret
+      AUTH_TOKEN_URL: http://keycloak:8080/realms/voyagemesh/protocol/openid-connect/token
+    secrets:
+      - orchestrator_client_secret
+  transport-agent:
+    environment:
+      <<: *local-auth
+  stay-agent:
+    environment:
+      <<: *local-auth
+  itinerary-agent:
+    environment:
+      <<: *local-auth
+  destination-mcp:
+    depends_on:
+      seed:
+        condition: service_completed_successfully

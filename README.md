@@ -43,10 +43,10 @@
 - [Data sources and RAG](#data-sources-and-rag)
 - [Run locally](#run-locally)
   - [Prerequisites](#prerequisites)
-  - [Prepare local demo settings](#1-prepare-local-demo-settings)
-  - [Configure authentication and destination data](#2-add-the-local-authentication-and-destination-configuration)
+  - [Download the project](#1-download-the-project)
+  - [Start the app](#2-start-the-app)
   - [Sign in and plan a trip](#3-sign-in-and-plan-a-trip)
-  - [Inspect or stop the stack](#4-inspect-or-stop-the-stack)
+  - [Stop or restart the app](#4-stop-or-restart-the-app)
 - [Call the API](#call-the-api)
 - [Configuration and optional live services](#configuration-and-optional-live-services)
   - [Start live mode without API keys](#start-live-mode-without-api-keys)
@@ -371,134 +371,101 @@ See [live provider setup](#add-keys-for-live-data) for credential paths and acti
 
 ## Run locally
 
+Start with the demo: **no API keys are needed**. It includes the app, login, agents, database and monitoring. Demo prices are simulated.
+
 ### Prerequisites
 
-- Git and a checkout of this repository.
-- Docker Desktop with the Linux container engine running and Docker Compose v2 available.
-- PowerShell for the commands below. Run them from the repository root.
-- Internet access for initial image/dependency downloads. The demo below uses mock travel data and a mock LLM afterward.
-- For development outside Docker: Python **3.12**, **uv**, and Node.js **22** with npm for frontend work.
+Install **Git** and **Docker Desktop**. Open Docker Desktop and wait until its Linux container engine is running. Use **PowerShell** for the commands below. Docker installs the application dependencies, so Python and Node.js are not needed for this path.
 
-### 1. Prepare local demo settings
+### 1. Download the project
 
-This guide starts the full browser experience with Keycloak login, authenticated agent calls, Redis, PostgreSQL and observability. No Groq key is required. Local setup files go in the already ignored `.tmp/` directory.
+Open PowerShell and run:
 
 ```powershell
-New-Item -ItemType Directory -Force .tmp | Out-Null
-
-if (-not (Test-Path .tmp/groq-placeholder.key)) {
-    Set-Content .tmp/groq-placeholder.key -Value "unused-in-mock-mode" -Encoding ascii
-}
-if (-not (Test-Path .tmp/orchestrator-client.key)) {
-    Set-Content .tmp/orchestrator-client.key -Value "CHANGE_ME_ORCHESTRATOR_SECRET" -Encoding ascii
-}
-
-$env:ENVIRONMENT = "local"
-$env:LLM_PROVIDER = "mock"
-$env:PROVIDER_MODE = "mock"
-$env:OTEL_ENABLED = "true"
-$env:GROQ_API_KEY_FILE_HOST = "./.tmp/groq-placeholder.key"
+git clone https://github.com/uddipan77/voyagemesh.git
+cd voyagemesh
 ```
 
-Compose mounts a Groq secret file even in mock mode, so an existing placeholder file is necessary. The service-client value above matches the **development-only placeholder** in the imported realm. It is not a production credential. An existing customised realm must use its matching client secret instead.
+If you already have the project, open PowerShell in that folder and continue to step 2.
 
-### 2. Add the local authentication and destination configuration
-
-The base Compose file does not forward every authentication/provider setting to every service. Create this override so browser-facing token issuers, container-internal Keycloak endpoints and destination database access are explicit:
+### 2. Start the app
 
 ```powershell
-@'
-x-local-auth: &local-auth
-  AUTH_ISSUER: http://localhost:8080/realms/voyagemesh
-  AUTH_JWKS_URL: http://keycloak:8080/realms/voyagemesh/protocol/openid-connect/certs
-  AUTH_AUDIENCE: voyagemesh-api
-  AUTH_SERVICE_AUTH: keycloak
-
-secrets:
-  orchestrator_client_secret:
-    file: ./.tmp/orchestrator-client.key
-
-services:
-  keycloak:
-    environment:
-      KC_HOSTNAME: http://localhost:8080
-  api-gateway:
-    environment:
-      <<: *local-auth
-      AUTH_DEV_INSECURE_ALLOW_UNAUTHENTICATED: "false"
-      AUTH_SERVICE_CLIENT_ID: voyagemesh-orchestrator
-      AUTH_SERVICE_CLIENT_SECRET_FILE: /run/secrets/orchestrator_client_secret
-      AUTH_TOKEN_URL: http://keycloak:8080/realms/voyagemesh/protocol/openid-connect/token
-    secrets:
-      - orchestrator_client_secret
-  transport-agent:
-    environment:
-      <<: *local-auth
-  stay-agent:
-    environment:
-      <<: *local-auth
-  itinerary-agent:
-    environment:
-      <<: *local-auth
-  destination-mcp:
-    environment:
-      DB_URL: postgresql+asyncpg://voyagemesh:voyagemesh@postgres:5432/voyagemesh
-      PROVIDER_MODE: ${PROVIDER_MODE:-mock}
-    depends_on:
-      seed:
-        condition: service_completed_successfully
-'@ | Set-Content .tmp/compose.local.yaml -Encoding utf8
-
-$composeFiles = @("-f", "docker-compose.yml", "-f", ".tmp/compose.local.yaml")
-docker compose @composeFiles --profile full config --quiet
-docker compose @composeFiles --profile full up -d --build
-docker compose @composeFiles --profile full ps --all
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
-Keep this PowerShell session open: later commands reuse `$composeFiles` and the environment settings. On a new session, restore them before running Compose commands. Migrations and corpus seeding are one-off services; an exit code of `0` is expected for those services. Wait until the application services are healthy and the Keycloak login page is available.
+The script prepares the local settings, enables Keycloak login and starts all services. The first run downloads and builds the images, which can take several minutes. Wait for the message telling you to open the app.
 
 ### 3. Sign in and plan a trip
 
-Open **[http://localhost:3000](http://localhost:3000)** and choose **Sign in with Keycloak**.
+1. Open **[localhost:3000](http://localhost:3000)**.
+2. Click **Sign in with Keycloak**. Keycloak is the service that handles your login.
+3. Enter **`traveller`** as both the username and password.
+4. Try **Nuremberg to Prague**, future dates for a three-night stay, **1 traveller**, **EUR 350**, and **hostel**.
+5. Click **Plan my trip**, then explore the result tabs.
 
-| Local development account | Password | Application roles |
-| --- | --- | --- |
-| `traveller` | `traveller` | Traveller |
-| `evaluator` | `evaluator` | Traveller, evaluator |
-| `admin` | `admin` | Traveller, evaluator, admin |
+The demo uses simulated prices. For real travel searches, follow [Add keys for live data](#add-keys-for-live-data).
 
-Use Nuremberg → Prague with a hostel preference, one traveller, a EUR 350 budget and three nights as a starting scenario. Review the source labels alongside the recommendations.
+### 4. Stop or restart the app
 
-| Service | Local address |
-| --- | --- |
-| Frontend | [localhost:3000](http://localhost:3000) |
-| API / Swagger UI | [localhost:8000/docs](http://localhost:8000/docs) |
-| Gateway health | [localhost:8000/health/ready](http://localhost:8000/health/ready) |
-| Keycloak | [localhost:8080](http://localhost:8080) |
-| Grafana | [localhost:3001](http://localhost:3001), local login `admin` / `admin` |
-| Prometheus | [localhost:9090](http://localhost:9090) |
-| Jaeger | [localhost:16686](http://localhost:16686) |
-| PostgreSQL / Redis | `localhost:5433` / `localhost:6380` |
-
-Agent and MCP ports are internal to the Docker network; the base Compose file does not publish them to the host.
-
-### 4. Inspect or stop the stack
+To stop the services, run this from the project folder:
 
 ```powershell
-docker compose @composeFiles --profile full logs --tail 100 api-gateway
-docker compose @composeFiles --profile full logs --tail 100 transport-agent stay-agent itinerary-agent
-docker compose @composeFiles --profile full down
+docker compose --profile full down
 ```
 
-Stopping this way retains named database, Grafana and Prometheus volumes. Redis has persistence disabled in this local setup, so its cached state is temporary.
+To start again, repeat step 2. Stopping this way keeps saved plans and monitoring volumes; temporary Redis cache data may be lost.
 
-Profiles are `core` (application and stores), `auth` (Keycloak and supporting stores/jobs), `observability` (monitoring and supporting stores/jobs), `full` (all services) and `test` (PostgreSQL/Redis). Combine profiles when needed; `auth` or `observability` alone does not start the frontend and agents. Starting `full` alone does not enforce authentication; the override above supplies that wiring.
+<details>
+<summary><strong>Optional: monitoring, logs and other local accounts</strong></summary>
+
+| Service | What I use it for | Address | Local login |
+| --- | --- | --- | --- |
+| VoyageMesh | Plan and review a trip | [localhost:3000](http://localhost:3000) | `traveller` / `traveller` |
+| Keycloak | Manage login and user roles | [localhost:8080/admin](http://localhost:8080/admin) | `admin` / `admin` |
+| Grafana | View system dashboards | [localhost:3001](http://localhost:3001) | `admin` / `admin` |
+| Prometheus | Inspect service metrics | [localhost:9090](http://localhost:9090) | No login |
+| Jaeger | Follow a request across services | [localhost:16686](http://localhost:16686) | No login |
+| API docs | Explore backend endpoints | [localhost:8000/docs](http://localhost:8000/docs) | API calls require a token |
+
+The app also has `evaluator` / `evaluator` and `admin` / `admin` development accounts. PostgreSQL is available on `localhost:5433` and Redis on `localhost:6380`. Agent and MCP ports stay inside Docker.
+
+View container status or recent gateway logs:
+
+```powershell
+docker compose --profile full ps --all
+docker compose --profile full logs --tail 100 api-gateway
+```
+
+Migration and seed containers are one-time setup jobs; exiting with code `0` is normal.
+
+</details>
+
+<details>
+<summary><strong>Optional: what the startup script does</strong></summary>
+
+[`scripts/start.ps1`](scripts/start.ps1) prepares ignored local files in `.tmp/`, then combines [`docker-compose.yml`](docker-compose.yml) and [`docker-compose.local.yml`](docker-compose.local.yml). The local override connects the browser and agents to Keycloak. The script uses mock travel data and mock narration unless you select `-Live` or `-Groq`.
+
+The Groq placeholder exists because Docker expects a mounted file even when no model API is used. The orchestrator placeholder matches the bundled development Keycloak realm. Existing files are preserved; a customised realm needs its matching client secret in `.tmp/orchestrator-client.key`. These defaults are for local development.
+
+Use `-Check` to validate setup without starting containers. The script restores your PowerShell environment when it finishes. You can close the terminal after startup; Docker keeps the services running.
+
+</details>
 
 ## Call the API
 
-Planning is synchronous: `POST /api/v1/trips` returns the final `TripPlan`. `GET /api/v1/trips/{trip_id}` reads a persisted result; it is not a background-job progress endpoint.
+**This is optional.** Use the browser UI for normal trip planning. The API lets a script or another application do the same thing:
 
-The following uses the realm's local development password grant for a CLI demonstration. Browser login uses Authorization Code + PKCE.
+1. Sign in to get a temporary access token.
+2. Send the trip details to `POST /api/v1/trips` and wait for the plan.
+3. Read a saved plan later with `GET /api/v1/trips/{trip_id}`.
+
+<details>
+<summary><strong>Show the PowerShell API example</strong></summary>
+
+Start the app first. Run these steps in the same PowerShell window. This example uses the local demo account; the browser handles login automatically.
+
+**1. Sign in.** The token proves the request comes from a logged-in user.
 
 ```powershell
 $gateway = "http://localhost:8000"
@@ -512,7 +479,11 @@ $tokenResponse = Invoke-RestMethod `
         username = "traveller"
         password = "traveller"
     }
+```
 
+**2. Choose the trip details.** The unique request ID prevents an accidental retry from creating the same request twice.
+
+```powershell
 $headers = @{
     Authorization = "Bearer $($tokenResponse.access_token)"
     "Idempotency-Key" = [guid]::NewGuid().ToString()
@@ -532,7 +503,11 @@ $trip = @{
     max_transfers = 2
     ranking_strategy = "balanced"
 }
+```
 
+**3. Ask for the plan and inspect the result.** The request waits until planning finishes.
+
+```powershell
 $plan = Invoke-RestMethod -Method Post -Uri "$gateway/api/v1/trips" `
     -Headers $headers -ContentType "application/json" `
     -Body ($trip | ConvertTo-Json -Depth 8)
@@ -542,13 +517,13 @@ $plan.budget | Select-Object total, remaining, overspend, status
 $plan.data_sources | Format-Table component, source_name, origin
 ```
 
-Use `$plan | ConvertTo-Json -Depth 30` to inspect the full response. Retrieve the saved plan with:
+**4. Read the saved plan later.** Use `$plan | ConvertTo-Json -Depth 30` if you want to inspect every result field.
 
 ```powershell
 Invoke-RestMethod -Uri "$gateway/api/v1/trips/$($plan.trip_id)" -Headers $headers
 ```
 
-Repeating a request with the same `Idempotency-Key` replays its stored response. To demonstrate the **plan cache**, send the same trip with a **new** idempotency key and inspect `cache_status`.
+Repeating a request with the same `Idempotency-Key` replays its stored response. To demonstrate the **plan cache in mock mode**, send the same trip with a **new** idempotency key and inspect `cache_status`.
 
 | Plan status | Meaning |
 | --- | --- |
@@ -557,9 +532,16 @@ Repeating a request with the same `Idempotency-Key` replays its stored response.
 | `no_viable_plan` | No usable transport recommendation could be produced |
 | `failed` | Validation, a blocking guardrail or a planning failure prevented a usable plan |
 
-HTTP success does not imply a complete trip. Inspect status, warnings, budget and completeness. API errors use a structured contract; examples include `401`, `403`, `409`, `422` and `429` for authentication, authorisation, an in-flight duplicate, invalid input and rate limiting.
+A successful API call can still return an incomplete plan. Check its status and warnings.
+
+</details>
 
 ## Configuration and optional live services
+
+The demo works without keys. Add travel-provider keys when you want real prices; Groq is optional and only changes the written explanations.
+
+<details>
+<summary><strong>Advanced settings and optional Groq narration</strong></summary>
 
 [`settings.py`](packages/vm_config/settings.py) defines defaults and validation. [`.env.example`](.env.example) lists application settings. A host `.env` file does not automatically inject every setting into Docker containers; Compose must explicitly forward it.
 
@@ -580,33 +562,30 @@ HTTP success does not imply a complete trip. Inspect status, warnings, budget an
 | `OTEL_ENABLED` | Enable trace instrumentation/export |
 | `GATEWAY_HOST_PORT` | Override the gateway's published host port |
 
-**Enable Groq:** create `apikeys/api.key` locally containing only your own key, then use the same Compose files:
+**Enable Groq:** save your key in `apikeys/api.key`, then run:
 
 ```powershell
-$env:LLM_PROVIDER = "groq"
-$env:GROQ_API_KEY_FILE_HOST = "./apikeys/api.key"
-docker compose @composeFiles --profile full up -d
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Groq
+# Add -Live as well if you want real travel-provider searches.
 ```
 
 The key is read at runtime and mounted read-only into agents. Do not put it in the README, frontend, Dockerfile or Git. The base Compose file uses the application's default Groq model; to choose another, add `GROQ_MODEL` to each agent's environment in the local override. Model access depends on your Groq account. Hosted calls require network access and are subject to provider limits.
 
+</details>
+
 ### Start live mode without API keys
 
-Complete the [local setup](#run-locally) first, including the local authentication override and mock-Groq placeholder. You can then start the live stack **before obtaining any travel-provider keys**:
+Run the startup command with `-Live`:
 
 ```powershell
-New-Item -ItemType Directory -Force apikeys/duffel, apikeys/liteapi, apikeys/geoapify | Out-Null
-docker compose @composeFiles -f docker-compose.live.yml --profile full up -d --build
-docker compose @composeFiles -f docker-compose.live.yml --profile full ps
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Live
 ```
 
-Add `docker-compose.live.yml` **last**, after the local authentication override. It explicitly sets live mode even when the demo environment says `PROVIDER_MODE=mock`.
-
-The UI at [localhost:3000](http://localhost:3000) and login still work without provider keys. A trip search reports unavailable flight, hotel and attraction data, with missing-key messages in Overview. Expect `no_viable_plan` when no transport can be priced. This is a working application with unavailable travel data, not a complete trip. Open-Meteo can still supply geocoding and weather without a key when its public API is reachable and the dates are within forecast coverage. No mock prices are substituted in live mode.
+The script creates the provider folders and applies the live configuration automatically. Without keys, login still works, but flights, hotels and attractions report unavailable data. Weather can still work through Open-Meteo. Live mode never substitutes simulated prices.
 
 ### Add keys for live data
 
-Save each credential in its own local file, relative to the repository root:
+**1. Save your provider keys.** Create these files inside the project folder:
 
 | Provider | Exact file to create | Required credential | Enables |
 | --- | --- | --- | --- |
@@ -616,23 +595,28 @@ Save each credential in its own local file, relative to the repository root:
 
 Each file must contain **only the key**, without quotes, `KEY=` prefixes or JSON. Use plain UTF-8 text without a byte-order mark, for example by creating the file in VS Code. These directories are excluded from Git and Docker build contexts. The live override mounts each directory read-only into only its corresponding MCP server.
 
-Keys can be added independently. Once this live stack is running, adding or replacing an `api.key` file in an already mounted directory is picked up on the **next new trip search**; no code edit, image rebuild or container restart is required. If you change the host directory itself, rerun Compose to update the mount. A saved trip is a historical result: submit a new request to fetch new prices.
+**2. Start live mode.**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Live
+```
+
+**3. Submit a new trip in the UI.** Keys can be added independently. If live mode is already running, newly added or replaced keys are read on the next new search without a restart. Previously saved plans do not refresh automatically.
 
 In the UI, select `flight` (or `any`), choose future dates and supply the guest's actual nationality as a two-letter code for hotel rates. Duffel and LiteAPI sandbox credentials are refused. Groq is optional and affects narration only. Rail/bus search remains unavailable in live mode until the Omio partner API is integrated.
 
-If you launch with `.tmp/app-launch.env`, keep that argument when recreating the stack:
-
-```powershell
-docker compose --env-file .tmp/app-launch.env -f docker-compose.yml -f .tmp/compose.local.yaml -f docker-compose.live.yml --profile full up -d --build
-```
+<details>
+<summary><strong>Custom key paths and troubleshooting</strong></summary>
 
 For direct Python runs, set `PROVIDER_MODE=live` and point `PROVIDER_DUFFEL_API_KEY_FILE`, `PROVIDER_LITEAPI_API_KEY_FILE` and `PROVIDER_GEOAPIFY_API_KEY_FILE` at your local key files. Use the longer request limits in [`docker-compose.live.yml`](docker-compose.live.yml) as a reference. In Docker, change the host directories through `DUFFEL_SECRETS_DIR`, `LITEAPI_SECRETS_DIR` and `GEOAPIFY_SECRETS_DIR`, then recreate the affected MCP containers to apply the mount changes.
 
 For live searches, select **flight** or **any**, use future dates and enter the hotel guest nationality as an uppercase two-letter country code, such as `DE` or `IN`. This version treats travellers as adults and searches one room for the whole group. Mixed nationalities, children and multiple-room occupancy are not supported. If a key is rejected, check that it belongs to the correct provider and production environment; missing keys and upstream failures appear in the plan warnings.
 
-**Port conflict:** set `$env:GATEWAY_HOST_PORT = "8001"` before `up`, then use `http://localhost:8001` for direct API calls. The frontend's internal proxy remains pointed at container port `8000`.
+**Port conflict:** add `-GatewayPort 8001` to the startup command, then use `http://localhost:8001` for direct API calls. The UI stays at `http://localhost:3000`.
 
 **Login troubleshooting:** use `localhost` consistently. The expected issuer is the browser-facing `http://localhost:8080/realms/voyagemesh`; JWKS and service-token requests use the Docker hostname `keycloak`. Check Keycloak logs and the imported realm if login fails. Existing realms are not overwritten by a fresh import file.
+
+</details>
 
 ## Development, tests and evaluation
 
@@ -736,10 +720,11 @@ Voyagemesh/
 ├── migrations/               Alembic database migrations
 ├── infra/                    Keycloak, OpenTelemetry, Prometheus and Grafana
 ├── docker/                   Dockerfiles and nginx configuration
-├── scripts/                  Smoke test and Groq verification utilities
+├── scripts/                  Startup, smoke test and Groq verification utilities
 ├── images/                   README visuals and application screenshots
 ├── .github/workflows/ci.yml  CI workflow
 ├── docker-compose.yml       Local service definitions and profiles
+├── docker-compose.local.yml Keycloak login and local service authentication
 ├── docker-compose.live.yml  Live providers and credential mounts
 ├── pyproject.toml            Python dependencies and tool configuration
 └── uv.lock                   Locked Python dependency graph
@@ -765,7 +750,7 @@ Current implementation boundaries include:
 - **Operational behaviour:** Redis-backed controls and database persistence fail open. Planning can succeed while rate limiting, deduplication or storage is unavailable. MCP tool-call counters accumulate for the server process lifetime, so extended demo use can require an MCP restart.
 - **Deployment:** development credentials, internal unauthenticated MCP access and exposed infrastructure ports need hardening before shared/public deployment. Hosted CI execution remains to be verified.
 
-The local and live Compose overrides above were used for the no-key Docker verification. This README follows the source implementation. Personal notes and assistant configuration stay local; only the root README is included as Markdown documentation in the public repository.
+The no-key Docker verification used local authentication settings equivalent to `docker-compose.local.yml`, together with `docker-compose.live.yml`. This README follows the source implementation. Personal notes and assistant configuration stay local; only the root README is included as Markdown documentation in the public repository.
 
 ## Explore the implementation
 
