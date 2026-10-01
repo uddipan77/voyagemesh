@@ -1,0 +1,253 @@
+{
+  "_meta": {
+    "description": "Curated points of interest used when a live POI API is unavailable or unkeyed. Unlike the transport and lodging mocks, these describe REAL places: names, categories, coordinates, and typical visit durations are accurate to the best of the author's knowledge. They are labelled FIXTURE rather than MOCKED for exactly that reason.",
+    "accuracy_note": "Opening hours are deliberately omitted. They change often and a stale opening time presented as fact is precisely the kind of confident-but-wrong output this project exists to avoid. The itinerary planner treats every fixture attraction's timing as estimated.",
+    "admission_note": "Admission prices are omitted for the same reason. Where an attraction is free to enter as a public space, is_free is set.",
+    "version": "1.0.0"
+  },
+  "cities": {
+    "prague": {
+      "centre": { "latitude": 50.0875, "longitude": 14.4213 },
+      "attractions": [
+        {
+          "attraction_id": "prague-charles-bridge",
+          "name": "Charles Bridge",
+          "category": "historic",
+          "latitude": 50.0865,
+          "longitude": 14.4114,
+          "typical_visit_minutes": 45,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["history", "architecture", "photography", "landmark"],
+          "description": "14th-century stone bridge over the Vltava, lined with baroque statues. Extremely crowded from mid-morning; early or late visits are markedly better.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "low_walking_distance"]
+        },
+        {
+          "attraction_id": "prague-castle",
+          "name": "Prague Castle complex",
+          "category": "historic",
+          "latitude": 50.0900,
+          "longitude": 14.4003,
+          "typical_visit_minutes": 180,
+          "is_outdoor": true,
+          "interest_tags": ["history", "architecture", "museum", "landmark"],
+          "description": "The largest ancient castle complex in the world, including St Vitus Cathedral and the Golden Lane. Grounds are free; individual buildings are ticketed.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access"]
+        },
+        {
+          "attraction_id": "prague-old-town-square",
+          "name": "Old Town Square and Astronomical Clock",
+          "category": "historic",
+          "latitude": 50.0870,
+          "longitude": 14.4208,
+          "typical_visit_minutes": 60,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["history", "architecture", "landmark", "photography"],
+          "description": "Medieval square with the 15th-century astronomical clock. The hourly apostle procession draws large crowds.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "wheelchair_accessible", "low_walking_distance"]
+        },
+        {
+          "attraction_id": "prague-jewish-quarter",
+          "name": "Josefov (Jewish Quarter)",
+          "category": "historic",
+          "latitude": 50.0900,
+          "longitude": 14.4180,
+          "typical_visit_minutes": 120,
+          "is_outdoor": false,
+          "interest_tags": ["history", "museum", "architecture", "culture"],
+          "description": "Preserved synagogues and the Old Jewish Cemetery, forming one of Europe's most significant Jewish heritage sites.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access"]
+        },
+        {
+          "attraction_id": "prague-petrin-hill",
+          "name": "Petřín Hill and Lookout Tower",
+          "category": "viewpoint",
+          "latitude": 50.0835,
+          "longitude": 14.3950,
+          "typical_visit_minutes": 120,
+          "is_outdoor": true,
+          "interest_tags": ["nature", "viewpoint", "park", "photography"],
+          "description": "Wooded hill reached by funicular, with a lookout tower giving the best panorama of the city. Poor value in low cloud.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access"]
+        },
+        {
+          "attraction_id": "prague-vysehrad",
+          "name": "Vyšehrad fortress",
+          "category": "historic",
+          "latitude": 50.0640,
+          "longitude": 14.4180,
+          "typical_visit_minutes": 90,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["history", "architecture", "park", "viewpoint"],
+          "description": "Hilltop fortress with a basilica and cemetery, considerably quieter than the castle and with comparable views.",
+          "accessibility_is_known": false,
+          "accessibility_features": []
+        },
+        {
+          "attraction_id": "prague-national-gallery",
+          "name": "National Gallery — Veletržní Palace",
+          "category": "gallery",
+          "latitude": 50.1010,
+          "longitude": 14.4340,
+          "typical_visit_minutes": 120,
+          "is_outdoor": false,
+          "interest_tags": ["art", "gallery", "museum", "culture"],
+          "description": "Modern and contemporary art in a functionalist palace. A strong wet-weather option.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "wheelchair_accessible", "elevator_required", "accessible_bathroom"]
+        },
+        {
+          "attraction_id": "prague-naplavka-market",
+          "name": "Náplavka riverside farmers' market",
+          "category": "market",
+          "latitude": 50.0725,
+          "longitude": 14.4160,
+          "typical_visit_minutes": 75,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["local food", "food", "market", "culture"],
+          "description": "Saturday-morning riverside market with regional producers and street food. Outdoors with little shelter.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "low_walking_distance"]
+        },
+        {
+          "attraction_id": "prague-letna-park",
+          "name": "Letná Park beer garden",
+          "category": "park",
+          "latitude": 50.0955,
+          "longitude": 14.4165,
+          "typical_visit_minutes": 90,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["nature", "park", "local food", "viewpoint", "nightlife"],
+          "description": "Hillside park above the river with a large open-air beer garden and a wide view across the bridges.",
+          "accessibility_is_known": false,
+          "accessibility_features": []
+        },
+        {
+          "attraction_id": "prague-municipal-house",
+          "name": "Municipal House (Obecní dům)",
+          "category": "architecture",
+          "latitude": 50.0875,
+          "longitude": 14.4278,
+          "typical_visit_minutes": 60,
+          "is_outdoor": false,
+          "interest_tags": ["architecture", "art", "history", "culture"],
+          "description": "Art Nouveau civic building with a concert hall and period café; among the finest secession interiors in the city.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "elevator_required"]
+        }
+      ]
+    },
+    "nuremberg": {
+      "centre": { "latitude": 49.4539, "longitude": 11.0775 },
+      "attractions": [
+        {
+          "attraction_id": "nuremberg-castle",
+          "name": "Nuremberg Castle (Kaiserburg)",
+          "category": "historic",
+          "latitude": 49.4577,
+          "longitude": 11.0765,
+          "typical_visit_minutes": 120,
+          "is_outdoor": true,
+          "interest_tags": ["history", "architecture", "viewpoint", "landmark"],
+          "description": "Imperial castle above the old town, with a deep well, the Sinwell Tower, and views over the rooftops.",
+          "accessibility_is_known": false,
+          "accessibility_features": []
+        },
+        {
+          "attraction_id": "nuremberg-documentation-centre",
+          "name": "Documentation Centre Nazi Party Rally Grounds",
+          "category": "museum",
+          "latitude": 49.4326,
+          "longitude": 11.1105,
+          "typical_visit_minutes": 150,
+          "is_outdoor": false,
+          "interest_tags": ["history", "museum", "culture"],
+          "description": "Museum in the unfinished Congress Hall examining the causes and consequences of the Nazi regime. Sober and demanding; allow time.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "wheelchair_accessible", "elevator_required", "accessible_bathroom"]
+        },
+        {
+          "attraction_id": "nuremberg-hauptmarkt",
+          "name": "Hauptmarkt and Schöner Brunnen",
+          "category": "market",
+          "latitude": 49.4542,
+          "longitude": 11.0775,
+          "typical_visit_minutes": 45,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["local food", "market", "history", "architecture"],
+          "description": "Central market square with a 14th-century gilded fountain and a daily produce market.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "wheelchair_accessible", "low_walking_distance"]
+        },
+        {
+          "attraction_id": "nuremberg-germanisches-museum",
+          "name": "Germanisches Nationalmuseum",
+          "category": "museum",
+          "latitude": 49.4478,
+          "longitude": 11.0755,
+          "typical_visit_minutes": 150,
+          "is_outdoor": false,
+          "interest_tags": ["history", "museum", "art", "culture"],
+          "description": "The largest museum of German cultural history, spanning prehistory to the twentieth century.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "wheelchair_accessible", "elevator_required"]
+        }
+      ]
+    },
+    "vienna": {
+      "centre": { "latitude": 48.2082, "longitude": 16.3738 },
+      "attractions": [
+        {
+          "attraction_id": "vienna-schonbrunn",
+          "name": "Schönbrunn Palace and gardens",
+          "category": "historic",
+          "latitude": 48.1845,
+          "longitude": 16.3122,
+          "typical_visit_minutes": 180,
+          "is_outdoor": true,
+          "interest_tags": ["history", "architecture", "park", "landmark"],
+          "description": "Former imperial summer residence with extensive baroque gardens. Gardens are free; the palace interior is ticketed.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "wheelchair_accessible", "accessible_bathroom"]
+        },
+        {
+          "attraction_id": "vienna-stephansdom",
+          "name": "St Stephen's Cathedral",
+          "category": "religious",
+          "latitude": 48.2085,
+          "longitude": 16.3735,
+          "typical_visit_minutes": 60,
+          "is_outdoor": false,
+          "interest_tags": ["architecture", "history", "religious", "landmark"],
+          "description": "Gothic cathedral at the centre of the old town, with a patterned tiled roof and a climbable south tower.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access"]
+        },
+        {
+          "attraction_id": "vienna-naschmarkt",
+          "name": "Naschmarkt",
+          "category": "market",
+          "latitude": 48.1985,
+          "longitude": 16.3630,
+          "typical_visit_minutes": 90,
+          "is_free": true,
+          "is_outdoor": true,
+          "interest_tags": ["local food", "food", "market", "culture"],
+          "description": "Long-established market with produce stalls, delicatessens, and casual restaurants.",
+          "accessibility_is_known": true,
+          "accessibility_features": ["step_free_access", "low_walking_distance"]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,47 @@
+# Add LAST, after any local auth override. No keys are required to build or boot.
+# Each MCP service sees only its own provider directory. A missing/empty key produces
+# unavailable data. Credentials are loaded on search; no keys are embedded in images.
+x-live-env: &live-env
+  PROVIDER_MODE: live
+  PROVIDER_HTTP_TIMEOUT_SECONDS: 8
+  PROVIDER_SEARCH_TIMEOUT_SECONDS: 6
+  MCP_TIMEOUT_SECONDS: 25
+  MCP_MAX_RETRIES: 0
+  A2A_TIMEOUT_SECONDS: 45
+  A2A_MAX_RETRIES: 0
+  LIMIT_MAX_AGENT_TASK_DURATION_SECONDS: 45
+  LIMIT_MAX_REQUEST_DURATION_SECONDS: 90
+  # A budget replan currently repeats the same upstream queries. Avoid extra paid calls.
+  LIMIT_MAX_REPLANS: 0
+
+services:
+  api-gateway:
+    environment:
+      <<: *live-env
+  transport-agent:
+    environment:
+      <<: *live-env
+  stay-agent:
+    environment:
+      <<: *live-env
+  itinerary-agent:
+    environment:
+      <<: *live-env
+  transport-mcp:
+    environment:
+      <<: *live-env
+      PROVIDER_DUFFEL_API_KEY_FILE: /run/secrets/duffel/api.key
+    volumes:
+      - ${DUFFEL_SECRETS_DIR:-./apikeys/duffel}:/run/secrets/duffel:ro
+  lodging-mcp:
+    environment:
+      <<: *live-env
+      PROVIDER_LITEAPI_API_KEY_FILE: /run/secrets/liteapi/api.key
+    volumes:
+      - ${LITEAPI_SECRETS_DIR:-./apikeys/liteapi}:/run/secrets/liteapi:ro
+  destination-mcp:
+    environment:
+      <<: *live-env
+      PROVIDER_GEOAPIFY_API_KEY_FILE: /run/secrets/geoapify/api.key
+    volumes:
+      - ${GEOAPIFY_SECRETS_DIR:-./apikeys/geoapify}:/run/secrets/geoapify:ro

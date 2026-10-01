@@ -1,0 +1,228 @@
+[project]
+name = "voyagemesh"
+version = "0.1.0"
+description = "VoyageMesh — An Observable, Secure, Budget-Aware Multi-Agent Travel Planner"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+
+dependencies = [
+    # --- web / api ---
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.18",
+    # --- models / config ---
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "orjson>=3.10.0",
+    # --- orchestration / llm ---
+    "langgraph>=0.2.50",
+    "langgraph-checkpoint>=2.0.0",
+    "groq>=0.13.0",
+    # --- mcp ---
+    "mcp>=1.2.0",
+    # --- clients / infra ---
+    "httpx>=0.27.0",
+    "redis[hiredis]>=5.2.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pgvector>=0.3.6",
+    # --- auth ---
+    "pyjwt[crypto]>=2.10.0",
+    # --- resilience / logging / metrics ---
+    "tenacity>=9.0.0",
+    "structlog>=24.4.0",
+    "prometheus-client>=0.21.0",
+    "tzdata>=2026.4",
+]
+
+[project.optional-dependencies]
+observability = [
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-instrumentation-httpx>=0.50b0",
+    "opentelemetry-instrumentation-redis>=0.50b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.50b0",
+    "opentelemetry-instrumentation-asyncpg>=0.50b0",
+    "opentelemetry-instrumentation-logging>=0.50b0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "bandit[toml]>=1.8.0",
+    "pip-audit>=2.7.3",
+    "types-redis>=4.6.0",
+    "rich>=13.9.0",
+]
+test = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "respx>=0.21.1",
+    "fakeredis>=2.26.0",
+    "freezegun>=1.5.0",
+    "anyio>=4.6.0",
+    "aiosqlite>=0.20",
+    "lupa>=2.0",
+]
+evaluation = [
+    "rich>=13.9.0",
+    "tabulate>=0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Every Python package is `vm_`-prefixed to avoid shadowing stdlib/3rd-party
+# module names (e.g. `logging`, `contracts`). See mdfiles/05-repository-structure.md.
+packages = [
+    "packages/vm_config",
+    "packages/vm_contracts",
+    "packages/vm_domain",
+    "packages/vm_llm",
+    "packages/vm_auth",
+    "packages/vm_caching",
+    "packages/vm_database",
+    "packages/vm_guardrails",
+    "packages/vm_harness",
+    "packages/vm_resilience",
+    "packages/vm_telemetry",
+    "packages/vm_logging",
+    "packages/vm_testing",
+    "apps/vm_api_gateway",
+    "agents/vm_orchestrator",
+    "agents/vm_transport_agent",
+    "agents/vm_stay_agent",
+    "agents/vm_itinerary_agent",
+    "mcp_servers/vm_transport_mcp",
+    "mcp_servers/vm_lodging_mcp",
+    "mcp_servers/vm_destination_mcp",
+]
+
+[tool.uv]
+default-groups = ["dev", "test", "evaluation"]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations/versions", "apps/frontend"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "ASYNC",    # async correctness
+    "S",        # bandit-style security
+    "RUF",
+]
+ignore = [
+    "S101",  # assert — used deliberately in tests
+    "B008",  # FastAPI Depends() in defaults is idiomatic
+]
+
+# These characters are used deliberately in user-facing strings and validation patterns:
+# en dash for ranges ("09:00–11:00"), typographic apostrophe for real toponyms
+# (N'Djamena), and the ellipsis in truncation messages.
+allowed-confusables = ["–", "’", "…"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311"]
+# PromQL expressions read best on one line; wrapping them risks subtle whitespace bugs.
+"infra/grafana/generate_dashboards.py" = ["E501"]
+# TOKEN_EXPIRED / TOKEN_INVALID are error-code enum members, not credentials.
+"packages/vm_contracts/errors.py" = ["S105"]
+"packages/vm_testing/**" = ["S105", "S106", "S311"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vm_config", "vm_contracts", "vm_domain", "vm_llm", "vm_auth",
+    "vm_caching", "vm_database", "vm_guardrails", "vm_resilience", "vm_telemetry",
+    "vm_logging", "vm_testing", "vm_harness", "vm_api_gateway", "vm_orchestrator", "vm_transport_agent",
+    "vm_stay_agent", "vm_itinerary_agent", "vm_transport_mcp", "vm_lodging_mcp",
+    "vm_destination_mcp", "evaluations"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+no_implicit_reexport = false
+plugins = ["pydantic.mypy"]
+mypy_path = "packages:apps:agents:mcp_servers"
+exclude = ["^apps/frontend/", "^migrations/versions/", "^\\.venv/"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "evaluations.*"]
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["pgvector.*", "fakeredis.*", "mcp.*", "langgraph.*", "groq.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["packages", "apps", "agents", "mcp_servers", "."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "unit: fast, no external dependencies",
+    "integration: requires Postgres/Redis (docker compose --profile test)",
+    "contract: schema/protocol compatibility between services",
+    "e2e: full stack via docker compose",
+    "security: security & guardrail assertions",
+    "evaluation: LLMOps evaluation suite",
+    "requires_docker: skipped when Docker is unavailable",
+    "requires_groq: skipped unless a real Groq key is present",
+    "requires_network: hits a real external API; opt-in via -m requires_network",
+]
+filterwarnings = ["error", "ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+branch = true
+source = ["packages", "apps", "agents", "mcp_servers"]
+omit = ["*/tests/*", "*/__main__.py"]
+
+[tool.coverage.report]
+skip_empty = true
+# The brief (§25) asks for a meaningful threshold rather than a vanity number. The suite sits at
+# ~91%, so 80 is a floor that catches a real regression without rewarding filler tests.
+fail_under = 80
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
+
+# ---------------------------------------------------------------------------
+# Bandit
+# ---------------------------------------------------------------------------
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "apps/frontend", "migrations"]

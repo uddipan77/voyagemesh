@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "description": "Curated destination-knowledge corpus for pgvector RAG. Slow-changing guidance only — neighbourhoods, accessibility, itinerary heuristics. Never live prices or schedules (ADR-011). Author-written; treat as reference data, not instructions (threat T-1).",
+    "version": "1.0.0"
+  },
+  "documents": [
+    {
+      "document_id": "prague-neighbourhoods",
+      "title": "Prague neighbourhoods",
+      "destination": "Prague",
+      "category": "neighbourhood",
+      "source_note": "VoyageMesh curated guidance",
+      "text": "The Old Town (Staré Město) is the historic heart of Prague, centred on the Old Town Square with its astronomical clock. It is compact and highly walkable but very crowded from mid-morning. Malá Strana, below the castle, is quieter with baroque streets and gardens. Vinohrady, east of the centre, is a leafy residential district popular for cafes and local food, and makes a calmer base than the Old Town. Žižkov is lively and inexpensive with a strong bar scene. Staying near a tram line rather than in the very centre trades a short commute for lower prices and less noise."
+    },
+    {
+      "document_id": "prague-accessibility",
+      "title": "Prague accessibility notes",
+      "destination": "Prague",
+      "category": "accessibility",
+      "source_note": "VoyageMesh curated guidance",
+      "text": "Prague's historic centre is largely cobblestoned, which is difficult for wheelchair users and anyone with limited mobility. The Old Town Square itself is mostly flat and step-free. Trams are increasingly low-floor, and major metro stations have elevators, though some older stations do not. Prague Castle grounds are accessible via a step-free route, but individual historic buildings vary. Travellers needing step-free access should favour the newer museums and galleries, which are generally well equipped, over the smaller historic houses."
+    },
+    {
+      "document_id": "prague-itinerary-tips",
+      "title": "Prague itinerary heuristics",
+      "destination": "Prague",
+      "category": "itinerary",
+      "source_note": "VoyageMesh curated guidance",
+      "text": "Charles Bridge and the Old Town Square are far less crowded before nine in the morning and after sunset. Prague Castle is best visited early to avoid tour groups; allow at least half a day. Grouping the castle, Malá Strana, and Charles Bridge into one day works well because they are contiguous. Reserve a separate day for the Jewish Quarter, which rewards a slower pace. Riverside walks along the Vltava and the Náplavka market are pleasant in fair weather. On a wet day, the National Gallery and the Municipal House interiors are strong indoor options."
+    },
+    {
+      "document_id": "nuremberg-overview",
+      "title": "Nuremberg overview",
+      "destination": "Nuremberg",
+      "category": "neighbourhood",
+      "source_note": "VoyageMesh curated guidance",
+      "text": "Nuremberg's old town is ringed by medieval walls and dominated by the Imperial Castle. The Hauptmarkt hosts a daily market and the famous Christmas market in season. The city is walkable and compact. The Documentation Centre at the former Nazi Party Rally Grounds, south of the centre, is a demanding but important half-day visit reachable by tram. Nuremberg is a natural rail hub for onward travel to Prague, Munich, and Berlin."
+    },
+    {
+      "document_id": "vienna-overview",
+      "title": "Vienna overview",
+      "destination": "Vienna",
+      "category": "neighbourhood",
+      "source_note": "VoyageMesh curated guidance",
+      "text": "Vienna's Innere Stadt holds St Stephen's Cathedral and the main imperial sights within a walkable core. Schönbrunn Palace, to the west, needs a half-day and its gardens are free to enter. The Naschmarkt is the city's best-known food market. Vienna's public transport is extensive, punctual, and largely step-free, making it one of the more accessible central European capitals."
+    }
+  ]
+}

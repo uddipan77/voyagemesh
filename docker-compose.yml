@@ -1,0 +1,340 @@
+# VoyageMesh local stack.
+#
+# Profiles (brief §26):
+#   core           app + Postgres + Redis (auth bypassed — quickest way to a working stack)
+#   auth           adds Keycloak (real OIDC)
+#   observability  adds OTel Collector + Jaeger + Prometheus + Grafana
+#   full           everything
+#   test           just Postgres + Redis, for integration tests
+#
+#   docker compose --profile core up --build
+#   docker compose --profile full up --build
+#
+# The orchestrator is NOT a separate container: it runs in-process inside api-gateway, which
+# reaches the three specialist agents over real A2A HTTP (see mdfiles/16-docker-compose.md).
+# The Groq key is mounted read-only at /run/secrets/groq_api_key and never copied into an image.
+
+name: voyagemesh
+
+x-python: &python
+  image: voyagemesh-python:local
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+
+x-app-env: &app-env
+  ENVIRONMENT: ${ENVIRONMENT:-local}
+  LOG_FORMAT: json
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  PROVIDER_MODE: ${PROVIDER_MODE:-mock}
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  REDIS_URL: redis://redis:6379/0
+  DB_URL: postgresql+asyncpg://voyagemesh:voyagemesh@postgres:5432/voyagemesh
+
+x-agent-env: &agent-env
+  <<: *app-env
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  GROQ_API_KEY_FILE: /run/secrets/groq_api_key
+  MCP_TRANSPORT_URL: http://transport-mcp:8110
+  MCP_LODGING_URL: http://lodging-mcp:8120
+  MCP_DESTINATION_URL: http://destination-mcp:8130
+
+networks:
+  vm:
+    driver: bridge
+
+volumes:
+  pgdata:
+  grafana-data:
+  prometheus-data:
+
+secrets:
+  groq_api_key:
+    file: ${GROQ_API_KEY_FILE_HOST:-./apikeys/api.key}
+
+services:
+  # ---- data stores ----
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles: [core, auth, observability, full, test]
+    environment:
+      POSTGRES_USER: voyagemesh
+      POSTGRES_PASSWORD: voyagemesh
+      POSTGRES_DB: voyagemesh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Published on 5433 to match what the integration tests and CI expect (and to avoid clashing
+    # with a Postgres already installed on the host). Services reach it as postgres:5432 over the
+    # Compose network, so only host access is affected.
+    ports: ["5433:5432"]
+    networks: [vm]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voyagemesh -d voyagemesh"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    profiles: [core, auth, observability, full, test]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # 6380 for the same reason as Postgres above; internally it stays redis:6379.
+    ports: ["6380:6379"]
+    networks: [vm]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---- one-off schema migration; gateway waits for it to complete ----
+  migrate:
+    <<: *python
+    profiles: [core, auth, observability, full]
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [vm]
+    restart: "no"
+
+  # Loads the curated RAG corpus into pgvector. Without this the stack starts with an empty
+  # corpus and destination knowledge retrieval silently returns nothing. Idempotent, so it runs
+  # on every `up`; it must follow the migration that creates the tables.
+  seed:
+    <<: *python
+    profiles: [core, auth, observability, full]
+    command: ["python", "-m", "vm_database.seed"]
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [vm]
+    restart: "no"
+
+  # ---- MCP servers (an agent's only route to data) ----
+  transport-mcp:
+    <<: *python
+    profiles: [core, full]
+    command: ["python", "-m", "vm_transport_mcp.server"]
+    environment:
+      <<: *app-env
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost',8110),timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  lodging-mcp:
+    <<: *python
+    profiles: [core, full]
+    command: ["python", "-m", "vm_lodging_mcp.server"]
+    environment:
+      <<: *app-env
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost',8120),timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  destination-mcp:
+    <<: *python
+    profiles: [core, full]
+    command: ["python", "-m", "vm_destination_mcp.server"]
+    environment:
+      <<: *app-env
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost',8130),timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ---- specialist agents (A2A HTTP services) ----
+  transport-agent:
+    <<: *python
+    profiles: [core, full]
+    command: ["uvicorn", "vm_transport_agent.app:app", "--host", "0.0.0.0", "--port", "8010"]
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: transport-agent
+      A2A_TRANSPORT_AGENT_URL: http://transport-agent:8010
+    secrets: [groq_api_key]
+    depends_on:
+      transport-mcp: {condition: service_healthy}
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck: &agent-health
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8010/a2a/health/live',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 15s
+
+  stay-agent:
+    <<: *python
+    profiles: [core, full]
+    command: ["uvicorn", "vm_stay_agent.app:app", "--host", "0.0.0.0", "--port", "8020"]
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: stay-agent
+      A2A_STAY_AGENT_URL: http://stay-agent:8020
+    secrets: [groq_api_key]
+    depends_on:
+      lodging-mcp: {condition: service_healthy}
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8020/a2a/health/live',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 15s
+
+  itinerary-agent:
+    <<: *python
+    profiles: [core, full]
+    command: ["uvicorn", "vm_itinerary_agent.app:app", "--host", "0.0.0.0", "--port", "8030"]
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: itinerary-agent
+      A2A_ITINERARY_AGENT_URL: http://itinerary-agent:8030
+    secrets: [groq_api_key]
+    depends_on:
+      destination-mcp: {condition: service_healthy}
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8030/a2a/health/live',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 15s
+
+  # ---- API gateway (hosts the in-process orchestrator) ----
+  api-gateway:
+    <<: *python
+    profiles: [core, full]
+    command: ["uvicorn", "vm_api_gateway.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *app-env
+      SERVICE_NAME: api-gateway
+      AUTH_DEV_INSECURE_ALLOW_UNAUTHENTICATED: ${AUTH_BYPASS:-true}
+      AUTH_ISSUER: ${AUTH_ISSUER:-http://keycloak:8080/realms/voyagemesh}
+      AUTH_AUDIENCE: voyagemesh-api
+      AUTH_SERVICE_AUTH: ${AUTH_SERVICE_AUTH:-shared_secret}
+      A2A_TRANSPORT_AGENT_URL: http://transport-agent:8010
+      A2A_STAY_AGENT_URL: http://stay-agent:8020
+      A2A_ITINERARY_AGENT_URL: http://itinerary-agent:8030
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+    # Host port is overridable because 8000 is a popular default and a host process already bound
+    # to 127.0.0.1:8000 silently wins over Docker's 0.0.0.0 bind — the gateway then looks "up and
+    # healthy" while every host request reaches the other process. Set GATEWAY_HOST_PORT to move
+    # it. Only host access is affected: the frontend proxies to api-gateway:8000 over the Compose
+    # network, and the container healthcheck probes localhost:8000 inside the container.
+    ports: ["${GATEWAY_HOST_PORT:-8000}:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      transport-agent: {condition: service_healthy}
+      stay-agent: {condition: service_healthy}
+      itinerary-agent: {condition: service_healthy}
+    networks: [vm]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/live',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 20s
+
+  # ---- frontend ----
+  frontend:
+    image: voyagemesh-frontend:local
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    profiles: [core, full]
+    ports: ["3000:3000"]
+    depends_on:
+      api-gateway: {condition: service_healthy}
+    networks: [vm]
+
+  # ---- auth ----
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    profiles: [auth, full]
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: "8080"
+    volumes:
+      - ./infra/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    ports: ["8080:8080"]
+    networks: [vm]
+
+  # ---- observability ----
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    profiles: [observability, full]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/otel/collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports: ["4318:4318", "8889:8889"]
+    depends_on:
+      jaeger: {condition: service_started}
+    networks: [vm]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: [observability, full]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports: ["16686:16686"]
+    networks: [vm]
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    profiles: [observability, full]
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+    networks: [vm]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: [observability, full]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3001:3000"]
+    depends_on:
+      prometheus: {condition: service_started}
+    networks: [vm]

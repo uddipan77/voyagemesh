@@ -1,0 +1,16 @@
+# Grafana dashboard provider — auto-loads every JSON dashboard in the mounted folder at start
+# (brief §21: "provision dashboards automatically through Docker").
+
+apiVersion: 1
+
+providers:
+  - name: voyagemesh
+    orgId: 1
+    folder: VoyageMesh
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

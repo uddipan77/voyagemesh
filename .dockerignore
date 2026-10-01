@@ -1,0 +1,86 @@
+# Secrets must never enter a build context.
+apikeys/
+**/apikeys/
+*.key
+**/*.key
+**/*.key.*
+*.pem
+**/*.pem
+**/*.pem.*
+**/*.p12
+**/*.pfx
+**/*.keystore
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.env
+**/.envrc
+secrets/
+**/secrets/
+credentials/
+**/credentials/
+**/credentials.json
+**/credentials.yaml
+**/credentials.yml
+.aws/
+.azure/
+.config/gcloud/
+**/id_rsa
+**/id_ed25519
+
+# Private assistant state
+**/.claude
+**/.claude.*
+**/.codex/
+**/.agents/
+**/.cursor/
+
+# VCS & docs
+.git/
+.github/
+mdfiles/
+design/
+**/*.[mM][dD]
+**/*.[mM][dD][xX]
+!/README.md
+
+# Python caches / local env
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage*
+**/coverage.xml
+**/htmlcov/
+**/reports/
+
+# Node
+**/node_modules/
+apps/frontend/dist/
+**/.vite/
+**/*.tsbuildinfo
+**/coverage/
+
+# Local artefacts
+**/logs/
+**/*.log
+**/tmp/
+**/.tmp/
+data/local/
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.rdb
+**/*.dump
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

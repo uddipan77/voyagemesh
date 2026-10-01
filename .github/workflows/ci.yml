@@ -1,0 +1,296 @@
+# VoyageMesh — Continuous Integration
+#
+# This project is not deployed, so this is CI, not CI/CD (brief §26). The pipeline is the
+# executable proof of the acceptance criteria: it lints, type-checks, tests (unit, integration,
+# contract, security, evaluation), scans for vulnerabilities and leaked secrets, lints and builds
+# the container images, scans them, validates every Compose profile, and runs a live smoke test.
+#
+# Jobs run in parallel where they are independent; each installs its own toolchain. The Groq key
+# is never needed here — tests that require it are marked `requires_groq` and skipped, and the
+# secret scan actively fails the build if a key ever reaches the tree.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to the same ref cancels the in-flight run — no point finishing stale work.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  # Belt-and-braces: the app configures OTel from the environment at import time; keep exporters
+  # off in CI so nothing tries to reach a collector that isn't there.
+  OTEL_ENABLED: "false"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Stages 5–7: formatting, linting, static types.
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Lint & types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # `observability` is an optional extra, so a bare `uv sync` leaves OpenTelemetry out and
+      # mypy cannot resolve the imports in vm_telemetry/vm_logging — 11 `import-not-found` errors
+      # under strict mode. The runtime image installs this extra too (docker/Dockerfile), so the
+      # type gate checks the same dependency set that ships.
+      - name: Install dependencies (locked)
+        run: uv sync --locked --extra observability
+
+      - name: Formatting check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Lint (ruff)
+        run: uv run ruff check --output-format=github .
+
+      # Strict type-checking targets the source tree (packages/apps/agents/mcp_servers/evaluations).
+      # Tests are intentionally excluded: their mypy override relaxes annotation rules, and running
+      # over them here would gate on rules the project deliberately does not enforce for test code.
+      - name: Static types (mypy strict)
+        run: uv run mypy packages apps agents mcp_servers evaluations
+
+  # ---------------------------------------------------------------------------
+  # Stages 8–11, 20–21: the test suite with coverage and a JUnit report.
+  #
+  # Real Postgres (with pgvector) and Redis are provided as service containers so the
+  # `requires_docker` integration tests actually run rather than skip. Tests that need a live
+  # Groq key or the public internet (`requires_groq`, `requires_network`) are excluded.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests & coverage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: voyagemesh
+          POSTGRES_PASSWORD: voyagemesh
+          POSTGRES_DB: voyagemesh
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U voyagemesh"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Match the default endpoints the integration tests look for (ports 5433 / 6380).
+      VM_TEST_DB_URL: postgresql+asyncpg://voyagemesh:voyagemesh@localhost:5433/voyagemesh
+      VM_TEST_REDIS_URL: redis://localhost:6380/0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Deliberately without the `observability` extra (unlike the quality and security jobs):
+      # OTEL_ENABLED is false here, the OpenTelemetry imports in vm_telemetry are function-local
+      # and fail-open, and no test references them. Running without it also proves that fail-open
+      # holds when the extra is absent.
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+
+      # One invocation covers unit + integration + contract + security + evaluation and writes a
+      # single coverage database. Steps below name the stages explicitly for a readable summary,
+      # but the coverage/JUnit artefacts come from this run so numbers are combined.
+      - name: Run test suite (unit, integration, contract, security, evaluation)
+        run: >-
+          uv run pytest -q
+          -m "not requires_groq and not requires_network"
+          --cov --cov-report=xml --cov-report=term-missing
+          --junitxml=reports/junit.xml
+
+      # Stage 11 as an explicit gate: the evaluation runner enforces the regression thresholds
+      # (a non-zero exit if any critical metric drops below its floor).
+      - name: Evaluation regression gate
+        run: uv run python -m evaluations.run --suite regression
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: reports/junit.xml
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Frontend type-check + production build (the same steps the frontend image runs, but faster
+  # feedback without Docker). This is the type gate for apps/frontend, which mypy/ruff skip.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies (locked)
+        run: npm ci
+
+      - name: Type-check & build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Stages 12–14: security static analysis, dependency vulnerabilities, secret scan.
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks scans history; fetch it all so a secret committed at any point is caught.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # With the `observability` extra, so pip-audit below audits the dependency set the runtime
+      # image actually installs; without it a CVE in an OpenTelemetry package would go unreported.
+      - name: Install dependencies (locked)
+        run: uv sync --locked --extra observability
+
+      - name: Static security analysis (bandit)
+        run: uv run bandit -c pyproject.toml -q -r packages apps agents mcp_servers evaluations
+
+      # Advisory, not a hard gate: a newly disclosed CVE in a third-party dependency we cannot
+      # immediately patch should surface loudly without turning the whole pipeline red. Bandit and
+      # the secret scan below are the hard security gates.
+      - name: Dependency vulnerability scan (pip-audit)
+        continue-on-error: true
+        run: uv run pip-audit --progress-spinner off
+
+      # Hard gate. Scans the full git history and the working tree for anything shaped like a
+      # secret (the Groq `gsk_` key, JWTs, private keys). Fails the build on any hit.
+      - name: Secret scan (gitleaks)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" \
+            zricethezav/gitleaks:latest detect \
+            --source=/repo --redact --verbose --exit-code=1
+
+  # ---------------------------------------------------------------------------
+  # Stages 15–19: Dockerfile lint, image builds, container scan, Compose validation, smoke test.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker build, scan & smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Stage 15 — lint both Dockerfiles.
+      - name: Lint Dockerfile (hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+
+      - name: Lint Dockerfile.frontend (hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile.frontend
+
+      # Stage 16 — build both images (loaded into the local daemon for scan + smoke test).
+      - name: Build Python service image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: voyagemesh-python:local
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.frontend
+          tags: voyagemesh-frontend:local
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Stage 17 — scan the built Python image for OS/library vulnerabilities. Advisory (see the
+      # dependency scan note above): report HIGH/CRITICAL without failing the pipeline on CVEs we
+      # cannot patch from here.
+      - name: Container vulnerability scan (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        with:
+          image-ref: voyagemesh-python:local
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      # Stage 18 — every profile must resolve to a valid config.
+      - name: Validate Compose profiles
+        run: |
+          for profile in core auth observability full test; do
+            echo "== docker compose --profile $profile config =="
+            docker compose --profile "$profile" config >/dev/null
+          done
+
+      # Stage 19 — bring up the core profile (mock LLM, auth bypassed — no secret, no network)
+      # and run the end-to-end smoke test. Images are already built above, so `up` reuses them.
+      - name: Smoke test the core stack
+        run: |
+          docker compose --profile core up -d
+          bash ./scripts/smoke_test.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose --profile core logs --no-color --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile core down -v

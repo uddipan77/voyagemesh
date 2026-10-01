@@ -1,0 +1,124 @@
+{
+  "realm": "voyagemesh",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "traveller", "description": "Can submit and view trip plans" },
+      { "name": "evaluator", "description": "Can run the evaluation suite" },
+      { "name": "admin", "description": "Administrative access" },
+      { "name": "agent:invoke", "description": "May submit A2A tasks to specialist agents" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "voyagemesh-frontend",
+      "name": "VoyageMesh Frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": ["basic", "profile", "email", "roles"],
+      "protocolMappers": [
+        {
+          "name": "voyagemesh-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "voyagemesh-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "voyagemesh-api",
+      "name": "VoyageMesh API Gateway",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false
+    },
+    {
+      "clientId": "voyagemesh-orchestrator",
+      "name": "VoyageMesh Orchestrator (service)",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "secret": "CHANGE_ME_ORCHESTRATOR_SECRET",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "protocolMappers": [
+        {
+          "name": "voyagemesh-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "voyagemesh-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "traveller",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "Traveller",
+      "email": "traveller@example.test",
+      "credentials": [
+        { "type": "password", "value": "traveller", "temporary": false }
+      ],
+      "realmRoles": ["traveller"]
+    },
+    {
+      "username": "evaluator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "evaluator@example.test",
+      "credentials": [
+        { "type": "password", "value": "evaluator", "temporary": false }
+      ],
+      "realmRoles": ["traveller", "evaluator"]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@example.test",
+      "credentials": [
+        { "type": "password", "value": "admin", "temporary": false }
+      ],
+      "realmRoles": ["traveller", "evaluator", "admin"]
+    },
+    {
+      "username": "service-account-voyagemesh-orchestrator",
+      "enabled": true,
+      "serviceAccountClientId": "voyagemesh-orchestrator",
+      "realmRoles": ["agent:invoke"]
+    }
+  ]
+}
