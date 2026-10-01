@@ -262,7 +262,7 @@ sequenceDiagram
     I-->>O: Card advertising plan_itinerary
     O->>O: Verify skill and obtain service token
     O->>I: POST /a2a/tasks with preferences and stay location
-    I->>M: Get attractions/weather; validate daily schedules
+    I->>M: Get attractions and weather, then validate daily schedules
     M->>P: Geoapify places and keyless Open-Meteo weather
     P-->>M: Available destination data
     M-->>I: Destination data and validation results
